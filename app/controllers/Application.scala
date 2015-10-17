@@ -15,7 +15,7 @@ object Application extends Controller {
   def getOrder(orderId: String) = Action {
     Logger.info(orderId)
     globals.db.withSession{implicit s =>
-      order.where(_.orderId === orderId).firstOption.fold(
+      order.filter(_.orderId === orderId).firstOption.fold(
         {
           val res = NotFound(Json.obj(
             "result" -> false,
@@ -67,7 +67,7 @@ object Application extends Controller {
     itemTagsAny: Option[String]
   ) = Action {
     globals.db.withSession{ implicit s =>
-      val q1 = order.where{ row =>
+      val q1 = order.filter { row =>
         ifemptyTrueOp(row.orderDateTime >= timeGte, timeGte)         &&
         ifemptyTrueOp(row.orderDateTime <= timeLte, timeLte)         &&
         ifemptyTrueOp(row.orderUserId === userId, userId)            &&
@@ -75,15 +75,20 @@ object Application extends Controller {
         ifemptyTrueOp(row.orderQuantity >= quantityGte, quantityGte) &&
         ifemptyTrueOp(row.orderQuantity >= quantityLte, quantityLte) &&
         ifemptyTrueOp(row.orderState === orderState, orderState)
-      }.sortBy(_.orderDateTime.desc)
+      }
 
-      val q2 = user.where { row =>
-        ifemptyTrueOp(row.userCompany      === userCompany, userCompany)        &&
+      val q2 = user.filter { row =>
+        ifemptyTrueOp(row.userCompany === userCompany, userCompany) &&
         ifemptyTrueOp(row.userDiscountRate >= discountRateGte, discountRateGte) &&
         ifemptyTrueOp(row.userDiscountRate <= discountRateLte, discountRateLte)
       }
 
-      val li = q1.take(100).list.map(o =>
+      val res = for {
+        order <- q1
+        user  <- q2 if(order.orderUserId === user.userId)
+      } yield(order)
+
+      val li = res.sortBy(_.orderDateTime.desc).take(100).list.map(o =>
         Json.obj(
           "orderId"       -> o.orderId,
           "orderDateTime" -> o.orderDateTime,
