@@ -3,9 +3,9 @@
 # ~~~~
 
 # Home page
+GET     /                           controllers.Application.init
+GET     /searchOrder                controllers.Application.searchOrder(findByOrderDateTimeGTE: Option[Long], findByOrderDateTimeLTE: Option[Long], findByOrderUserId: Option[String], findByOrderItemId: Option[String], findByOrderQuantityGTE: Option[Int], findByOrderQuantityLTE: Option[Int], findByOrderState: Option[String], findByOrderTagsIncludeAll: Option[String], findByOrderTagsIncludeAny: Option[String], findByUserCompany: Option[String], findByUserDiscountRateGTE: Option[Int], findByUserDiscountRateLTE: Option[Int], findByItemSupplier: Option[String], findByItemStockQuantityGTE: Option[Int], findByItemStockQuantityLTE: Option[Int], findByItemBasePriceGTE: Option[Int], findByItemBasePriceLTE: Option[Int], findByItemTagsIncludeAll: Option[String], findByItemTagsIncludeAny: Option[String], limit: Option[Int])
 GET     /getOrder/:orderId          controllers.Application.getOrder(orderId)
-GET     /searchOrder                controllers.Application.searchOrder(findByOrderDateTimeGTE: Option[Long], findByOrderDateTimeLTE: Option[Long], findByOrderUserId: Option[String], findByOrderItemId: Option[String], findByOrderQuantityGTE: Option[Int], findByOrderQuantityLTE: Option[Int], findByOrderState: Option[String], findByOrderTagsIncludeAll: Option[String], findByOrderTagsIncludeAny: Option[String], findByUserCompany: Option[String], findByUserDiscountRateGTE: Option[Int], findByUserDiscountRateLTE: Option[Int], findByItemSupplier: Option[String], findByItemStockQuantityGTE: Option[Int], findByItemStockQuantityLTE: Option[Int], findByItemBasePriceGTE: Option[Int], findByItemBasePriceLTE: Option[Int], findByItemTagsIncludeAll: Option[String], findByItemTagsIncludeAny: Option[String])
-
 
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
