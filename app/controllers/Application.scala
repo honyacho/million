@@ -73,30 +73,7 @@ object Application extends Controller {
     limit: Option[Int]
   ) = Action {
     globals.db.withSession{ implicit s =>
-      val query = if (userCompany.nonEmpty || discountRateGte.nonEmpty || discountRateLte.nonEmpty)
-        query2(
-          userCompany,
-          discountRateGte,
-          discountRateLte,
-          limit
-        ) else if (
-          itemSupplier.nonEmpty ||
-          itemStockQuantityGte.nonEmpty ||
-          itemStockQuantityLte.nonEmpty ||
-          itemBasePriceGte.nonEmpty ||
-          itemBasePriceLte.nonEmpty ||
-          itemTagsAll.nonEmpty ||
-          itemTagsAny.nonEmpty
-        ) query3(
-          itemSupplier,
-          itemStockQuantityGte,
-          itemStockQuantityLte,
-          itemBasePriceGte,
-          itemBasePriceLte,
-          itemTagsAll,
-          itemTagsAny,
-          limit
-        ) else query1(
+      val query = query1(
           timeGte,
           timeLte,
           userId,
@@ -106,6 +83,18 @@ object Application extends Controller {
           orderState,
           tagsAll.filter(_.nonEmpty).map(_.split(",")).getOrElse(Array[String]()),
           tagsAny.filter(_.nonEmpty).map(_.split(",")).getOrElse(Array[String]()),
+
+          userCompany,
+          discountRateGte,
+          discountRateLte,
+
+          itemSupplier,
+          itemStockQuantityGte,
+          itemStockQuantityLte,
+          itemBasePriceGte,
+          itemBasePriceLte,
+          itemTagsAll.filter(_.nonEmpty).map(_.split(",")).getOrElse(Array[String]()),
+          itemTagsAny.filter(_.nonEmpty).map(_.split(",")).getOrElse(Array[String]()),
           limit
         )
 
@@ -127,6 +116,19 @@ object Application extends Controller {
     orderState: Option[String],
     tagsAll: Array[String],
     tagsAny: Array[String],
+
+    userCompany: Option[String],
+    discountRateGte: Option[Int],
+    discountRateLte: Option[Int],
+
+    itemSupplier: Option[String],
+    itemStockQuantityGte: Option[Int],
+    itemStockQuantityLte: Option[Int],
+    itemBasePriceGte: Option[Int],
+    itemBasePriceLte: Option[Int],
+    itemTagsAll: Array[String],
+    itemTagsAny: Array[String],
+
     limit: Option[Int]
   ): String = {
     val sb = new StringBuilder()
@@ -139,6 +141,29 @@ object Application extends Controller {
     quantityLte.map("o.order_quantity <=" + _).foreach(conds += _)
     orderState.map(i => "o.order_state = '${i}'").foreach(conds += _)
     sb.append("select o.json from `order` o")
+
+    if (userCompany.nonEmpty || discountRateGte.nonEmpty || discountRateLte.nonEmpty) {
+      sb.append(" inner join user u on o.order_user_id = u.user_id")
+      userCompany.map(v => s"u.user_company = '${v}'").foreach(conds += _)
+      discountRateGte.map("u.user_discount_rate >= " + _).foreach(conds += _)
+      discountRateLte.map("u.user_discount_rate <= " + _).foreach(conds += _)
+    }
+
+    if (itemSupplier.nonEmpty || itemStockQuantityGte.nonEmpty || itemStockQuantityLte.nonEmpty || itemBasePriceGte.nonEmpty || itemBasePriceLte.nonEmpty) {
+      sb.append(" inner join item i on i.item_id = o.order_item_id")
+      itemSupplier.map(i => s"i.item_supplier = '${i}'").foreach(conds += _)
+      itemStockQuantityGte.map("i.item_stock_quantity >= " + _).foreach(conds += _)
+      itemStockQuantityLte.map("i.item_stock_quantity <= " + _).foreach(conds += _)
+      itemBasePriceGte.map("i.item_base_price >=" + _).foreach(conds += _)
+      itemBasePriceLte.map("i.item_base_price <=" + _).foreach(conds += _)
+    }
+
+    itemSupplier.map(i => s"i.item_supplier = '${i}'").foreach(conds += _)
+    itemStockQuantityGte.map("i.item_stock_quantity >= " + _).foreach(conds += _)
+    itemStockQuantityLte.map("i.item_stock_quantity <= " + _).foreach(conds += _)
+    itemBasePriceGte.map("i.item_base_price >=" + _).foreach(conds += _)
+    itemBasePriceLte.map("i.item_base_price <=" + _).foreach(conds += _)
+
     for ((v, i) <- tagsAll.zipWithIndex) {
       val tagTable = "t" + i.toString
       val relTable = "ot" + i.toString
@@ -160,6 +185,29 @@ object Application extends Controller {
       sb.append(" inner join order_tag oott on oott.order_id = o.id inner join tag tt on oott.tag_id = tt.id")
       conds += ("tt.name in " + tagsAny.mkString("('", "','", "')"))
     }
+
+    for ((v, i) <- itemTagsAll.zipWithIndex) {
+      val tagTable = "t" + i.toString
+      val relTable = "it" + i.toString
+      sb.append(" inner join item_tag ")
+      sb.append(relTable)
+      sb.append(" on ")
+      sb.append(relTable)
+      sb.append(".item_id = i.id")
+      sb.append(" inner join tag2 ")
+      sb.append(tagTable)
+      sb.append(" on ")
+      sb.append(relTable)
+      sb.append(".tag2_id = ")
+      sb.append(tagTable)
+      sb.append(".id")
+      conds += (s"${tagTable}.name = '${v}'")
+    }
+    if (itemTagsAny.nonEmpty) {
+      sb.append(" inner join item_tag iitt on iitt.item_id = i.id inner join tag2 tt on iitt.tag2_id = tt.id")
+      conds += ("tt.name in " + itemTagsAny.mkString("('", "','", "')"))
+    }
+
     if (conds.nonEmpty) {
       sb.append(" where ")
       sb.append(conds mkString " and ")
