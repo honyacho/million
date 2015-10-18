@@ -48,9 +48,9 @@ object Application extends Controller {
     if(opt.isEmpty) LiteralColumn(Option(true)) else cond
 
   def time[T](f: => T, str: String): T = {
-    val start = System.currentTimeMillis
+    // val start = System.currentTimeMillis
     val r = f
-    println(str + (System.currentTimeMillis -start) + "ms")
+    // println(str + (System.currentTimeMillis -start) + "ms")
     r
   }
 
@@ -206,7 +206,7 @@ object Application extends Controller {
     }
 
     for ((v, i) <- itemTagsAll.zipWithIndex) {
-      val tagTable = "t" + i.toString
+      val tagTable = "2t" + i.toString
       val relTable = "it" + i.toString
       sb.append(" inner join item_tag ")
       sb.append(relTable)
@@ -223,8 +223,8 @@ object Application extends Controller {
       conds += (s"${tagTable}.name = '${v}'")
     }
     if (itemTagsAny.nonEmpty) {
-      sb.append(" inner join item_tag iitt on iitt.item_id = i.id inner join tag2 tt on iitt.tag2_id = tt.id")
-      conds += ("tt.name in " + itemTagsAny.mkString("('", "','", "')"))
+      sb.append(" inner join item_tag iitt on iitt.item_id = i.id inner join tag2 tt2 on iitt.tag2_id = tt2.id")
+      conds += ("tt2.name in " + itemTagsAny.mkString("('", "','", "')"))
     }
 
     if (conds.nonEmpty) {
