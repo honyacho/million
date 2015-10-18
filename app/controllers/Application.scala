@@ -108,7 +108,13 @@ object Application extends Controller {
           limit
         ), "query build time: ")
 
-      val res = time(Q.queryNA[String](query).list, "query execution: ")
+      val st = System.currentTimeMillis
+      val res = Q.queryNA[String](query).list
+      val el = System.currentTimeMillis - st
+      if(el > 1000) {
+        Logger.info("query execution: " + el + "ms")
+        Logger.info(query)
+      }
       Ok(time(buildReturnJson(res), "json serialize: ")).as(JSON)
     }
   }
