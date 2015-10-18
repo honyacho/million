@@ -72,8 +72,26 @@ object Application extends Controller {
     limit: Option[Int]
   ) = Action {
     globals.db.withSession{ implicit s =>
-      val q1 = query1(timeGte, timeLte, userId, itemId, quantityGte, quantityLte, orderState, tagsAll, tagsAny, limit)
-      val res = Q.queryNA[String](q1).list
+      val query = if (userCompany.nonEmpty || discountRateGte.nonEmpty || discountRateLte.nonEmpty)
+        query2(
+          userCompany,
+          discountRateGte,
+          discountRateLte,
+          limit
+        ) else query1(
+          timeGte,
+          timeLte,
+          userId,
+          itemId,
+          quantityGte,
+          quantityLte,
+          orderState,
+          tagsAll.filter(_.nonEmpty).map(_.split(",")).getOrElse(Array[String]()),
+          tagsAny.filter(_.nonEmpty).map(_.split(",")).getOrElse(Array[String]()),
+          limit
+        )
+
+      val res = Q.queryNA[String](query).list
       Ok(Json.obj(
         "result" -> true,
         "data"   -> Json.parse(res.mkString("[", ",", "]"))
@@ -89,8 +107,8 @@ object Application extends Controller {
     quantityGte: Option[Int],
     quantityLte: Option[Int],
     orderState: Option[String],
-    tagsAll: Option[String],
-    tagsAny: Option[String],
+    tagsAll: Array[String],
+    tagsAny: Array[String],
     limit: Option[Int]
   ): String = {
     val sb = new StringBuilder()
@@ -103,14 +121,56 @@ object Application extends Controller {
     quantityLte.map("o.order_quantity <=" + _).foreach(conds += _)
     orderState.map(i => "o.order_state = '${i}'").foreach(conds += _)
     sb.append("select o.json from `order` o")
+    for ((v, i) <- tagsAll.zipWithIndex) {
+      val tagTable = "t" + i.toString
+      val relTable = "ot" + i.toString
+      sb.append(" inner join order_tag ")
+      sb.append(relTable)
+      sb.append(" on ")
+      sb.append(relTable)
+      sb.append(".order_id = o.id")
+      sb.append(" inner join tag ")
+      sb.append(tagTable)
+      sb.append(" on ")
+      sb.append(relTable)
+      sb.append(".tag_id = ")
+      sb.append(tagTable)
+      sb.append(".id")
+      conds += (s"${tagTable}.name = '${v}'")
+    }
+    if (tagsAny.nonEmpty) {
+      sb.append(" inner join order_tag oott on oott.order_id = o.id inner join tag tt on oott.tag_id = tt.id")
+      conds += ("tt.name in " + tagsAny.mkString("('", "','", "')"))
+    }
     if (conds.nonEmpty) {
       sb.append(" where ")
       sb.append(conds mkString " and ")
     }
     sb.append(" limit ")
     sb.append(limit.getOrElse(100).toString)
-    // tagsAll
-    // tagsAny
+    sb.result
+  }
+
+  def query2(
+    userCompany: Option[String],
+    discountRateGte: Option[Int],
+    discountRateLte: Option[Int],
+    limit: Option[Int]
+  ): String = {
+    val sb = new StringBuilder()
+    val conds = new scala.collection.mutable.ArrayBuffer[String]()
+    userCompany.map(v => s"u.user_company = '${v}'").foreach(conds += _)
+    discountRateGte.map("u.user_discount_rate >= " + _).foreach(conds += _)
+    discountRateLte.map("u.user_discount_rate <= " + _).foreach(conds += _)
+
+    sb.append("select o.json from `order` o inner join user u on o.order_user_id = u.user_id")
+
+    if (conds.nonEmpty) {
+      sb.append(" where ")
+      sb.append(conds mkString " and ")
+    }
+    sb.append(" limit ")
+    sb.append(limit.getOrElse(100).toString)
     sb.result
   }
 
