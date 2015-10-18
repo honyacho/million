@@ -47,6 +47,13 @@ object Application extends Controller {
   private def ifemptyTrueOp(cond: Column[Option[Boolean]], opt: Option[_]) =
     if(opt.isEmpty) LiteralColumn(Option(true)) else cond
 
+  def time[T](f: => T, str: String): T = {
+    val start = System.currentTimeMillis
+    val r = f
+    println(str + (System.currentTimeMillis -start) + "ms")
+    r
+  }
+
   def searchOrder(
     timeGte: Option[Long],
     timeLte: Option[Long],
@@ -73,7 +80,7 @@ object Application extends Controller {
     limit: Option[Int]
   ) = Action {
     globals.db.withSession{ implicit s =>
-      val query = query1(
+      val query = time(query1(
           timeGte,
           timeLte,
           userId,
@@ -96,14 +103,25 @@ object Application extends Controller {
           itemTagsAll.filter(_.nonEmpty).map(_.split(",")).getOrElse(Array[String]()),
           itemTagsAny.filter(_.nonEmpty).map(_.split(",")).getOrElse(Array[String]()),
           limit
-        )
+        ), "query build time: ")
 
-      val res = Q.queryNA[String](query).list
-      Ok(Json.obj(
-        "result" -> true,
-        "data"   -> Json.parse(res.mkString("[", ",", "]"))
-      ))
+      val res = time(Q.queryNA[String](query).list, "query execution: ")
+      Ok(time(buildReturnJson(res), "json serialize: ")).as(JSON)
     }
+  }
+
+  def buildReturnJson(objs: List[String]): String = {
+    val r = new StringBuilder()
+    var isFirst = true
+    r.append("""{"result":true,"data":[""")
+    objs.foreach{o =>
+      if(isFirst) {isFirst = false;} else {
+        r.append(""",""")
+      }
+      r.append(o)
+    }
+    r.append("""]""")
+    r.result
   }
 
   def query1(
@@ -131,6 +149,7 @@ object Application extends Controller {
 
     limit: Option[Int]
   ): String = {
+
     val sb = new StringBuilder()
     val conds = new scala.collection.mutable.ArrayBuffer[String]()
     timeGte.map("o.order_date_time >= " + _).foreach(conds += _)
