@@ -227,7 +227,7 @@ object Application extends Controller {
       sb.append(relTable)
       sb.append(" on ")
       sb.append(relTable)
-      sb.append(".order_id = o.id")
+      sb.append(".item_id = i.id")
       sb.append(" inner join tag ")
       sb.append(tagTable)
       sb.append(" on ")
