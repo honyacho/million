@@ -14,6 +14,7 @@ object Application extends Controller {
 
   val user = TableQuery[Users]
   val order = TableQuery[Orders]
+  val item = TableQuery[Items]
 
   def getOrder(orderId: String) = Action {
     Logger.info(orderId)
@@ -77,6 +78,23 @@ object Application extends Controller {
           userCompany,
           discountRateGte,
           discountRateLte,
+          limit
+        ) else if (
+          itemSupplier.nonEmpty ||
+          itemStockQuantityGte.nonEmpty ||
+          itemStockQuantityLte.nonEmpty ||
+          itemBasePriceGte.nonEmpty ||
+          itemBasePriceLte.nonEmpty ||
+          itemTagsAll.nonEmpty ||
+          itemTagsAny.nonEmpty
+        ) query3(
+          itemSupplier,
+          itemStockQuantityGte,
+          itemStockQuantityLte,
+          itemBasePriceGte,
+          itemBasePriceLte,
+          itemTagsAll,
+          itemTagsAny,
           limit
         ) else query1(
           timeGte,
@@ -184,6 +202,55 @@ object Application extends Controller {
     }
   }
 
+  def query3(
+    itemSupplier: Option[String],
+    itemStockQuantityGte: Option[Int],
+    itemStockQuantityLte: Option[Int],
+    itemBasePriceGte: Option[Int],
+    itemBasePriceLte: Option[Int],
+    itemTagsAll: Option[String],
+    itemTagsAny: Option[String],
+    limit: Option[Int]
+  ): String = {
+    val sb = new StringBuilder()
+    val conds = new scala.collection.mutable.ArrayBuffer[String]()
+    itemSupplier.map(i => s"i.item_supplier = '${i}'").foreach(conds += _)
+    itemStockQuantityGte.map("i.item_stock_quantity >= " + _).foreach(conds += _)
+    itemStockQuantityLte.map("i.item_stock_quantity <= " + _).foreach(conds += _)
+    itemBasePriceGte.map("i.item_base_price >=" + _).foreach(conds += _)
+    itemBasePriceLte.map("i.item_base_price <=" + _).foreach(conds += _)
+    sb.append("select o.json from `order` o inner join item i on i.item_id = o.order_item_id")
+    for ((v, i) <- itemTagsAll.zipWithIndex) {
+      val tagTable = "t" + i.toString
+      val relTable = "it" + i.toString
+      sb.append(" inner join item_tag ")
+      sb.append(relTable)
+      sb.append(" on ")
+      sb.append(relTable)
+      sb.append(".order_id = o.id")
+      sb.append(" inner join tag ")
+      sb.append(tagTable)
+      sb.append(" on ")
+      sb.append(relTable)
+      sb.append(".tag_id = ")
+      sb.append(tagTable)
+      sb.append(".id")
+      conds += (s"${tagTable}.name = '${v}'")
+    }
+    if (itemTagsAny.nonEmpty) {
+      sb.append(" inner join item_tag iitt on iitt.item_id = i.id inner join tag2 tt on iitt.tag2_id = tt.id")
+      conds += ("tt.name in " + itemTagsAny.mkString("('", "','", "')"))
+    }
+    if (conds.nonEmpty) {
+      sb.append(" where ")
+      sb.append(conds mkString " and ")
+    }
+    sb.append(" limit ")
+    sb.append(limit.getOrElse(100).toString)
+    sb.result
+  }
+
+
   @tailrec
   def bulkInsert10000(n: Int, bulk: StringBuilder, mp: Map[String, Int], li: List[(Long, String)]): List[(Long, String)] = li match {
     case head :: tail if(n < 10000) =>
@@ -196,23 +263,23 @@ object Application extends Controller {
       bulkInsert10000(n+1, bulk, mp, tail)
     case _ =>
       globals.db.withSession { implicit s =>
-        (Q.u + "insert into order_tag (order_id, tag_id) values" + bulk.result).execute
+        (Q.u + "insert into item_tag (item_id, tag2_id) values" + bulk.result).execute
       }
       li
   }
 
   def init = Action {
     globals.db.withSession { implicit s =>
-      val q = sql"select tag.name, tag.id from tag".as[(String, Int)]
+      val q = sql"select tag2.name, tag2.id from tag2".as[(String, Int)]
       val mp = q.list.toMap
-      println(mp)
-      // val set = scala.collection.mutable.Set[String]()
+      // println(mp)
+      val set = scala.collection.mutable.Set[String]()
       // var c = 0
       val start = System.currentTimeMillis
       // 全件取得
-      // val li = order.map(o => (o.id, o.orderTags)).list.flatMap(t => t._2.split(",").map(t._1 -> _).toList)
+      //val li = item.map(o => (o.id, o.itemTags)).list.flatMap(t => t._2.split(",").map(t._1 -> _).toList)
 
-      // bulkInsert(mp, li)
+      //bulkInsert(mp, li)
       // li.foreach(_._2.foreach { name =>
       //   c = c+1
       //   if (c % 1000 == 0) {
