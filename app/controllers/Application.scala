@@ -120,7 +120,7 @@ object Application extends Controller {
       }
       r.append(o)
     }
-    r.append("""]""")
+    r.append("""]}""")
     r.result
   }
 
