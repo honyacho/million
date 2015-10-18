@@ -16,6 +16,7 @@ object Application extends Controller {
   val order = TableQuery[Orders]
   val item = TableQuery[Items]
 
+  // チュートリアル用？
   def getOrder(orderId: String) = Action {
     Logger.info(orderId)
     globals.db.withSession{implicit s =>
@@ -44,13 +45,11 @@ object Application extends Controller {
     }
   }
 
-  private def ifemptyTrueOp(cond: Column[Option[Boolean]], opt: Option[_]) =
-    if(opt.isEmpty) LiteralColumn(Option(true)) else cond
-
   def time[T](f: => T, str: String): T = {
     val start = System.currentTimeMillis
     val r = f
     val elapse = System.currentTimeMillis-start
+    // 一応1000msでログ
     if (elapse > 1000) {
       println(str + elapse + "ms")
     }
@@ -83,6 +82,7 @@ object Application extends Controller {
     limit: Option[Int]
   ) = Action {
     globals.db.withSession{ implicit s =>
+      // クエリをビルド
       val query = time(query1(
           timeGte,
           timeLte,
@@ -109,8 +109,11 @@ object Application extends Controller {
         ), "query build time: ")
 
       val st = System.currentTimeMillis
+      // クエリ実行
       val res = Q.queryNA[String](query).list
       val el = System.currentTimeMillis - st
+
+      // 1000ms 以上だけログ(クエリも)
       if(el > 1000) {
         Logger.info("query execution: " + el + "ms")
         Logger.info(query)
@@ -119,12 +122,15 @@ object Application extends Controller {
     }
   }
 
+  // MySQLに格納してあったJSON objectをレスポンス用に組み立てる
+  // json系のライブラリは実行時間の無駄なので使わない
   def buildReturnJson(objs: List[String]): String = {
     val r = new StringBuilder()
+    // var(笑)
     var isFirst = true
     r.append("""{"result":true,"data":[""")
     objs.foreach{o =>
-      if(isFirst) {isFirst = false;} else {
+      if (isFirst) { isFirst = false } else {
         r.append(""",""")
       }
       r.append(o)
@@ -133,6 +139,7 @@ object Application extends Controller {
     r.result
   }
 
+  // クソでかクエリくんをひたすら組み立てる
   def query1(
     timeGte: Option[Long],
     timeLte: Option[Long],
@@ -159,6 +166,7 @@ object Application extends Controller {
     limit: Option[Int]
   ): String = {
 
+    // 基本だけどStringBuilderを使うことはかなり重要
     val sb = new StringBuilder()
     val conds = new scala.collection.mutable.ArrayBuffer[String]()
     timeGte.map("o.order_date_time >= " + _).foreach(conds += _)
@@ -170,6 +178,7 @@ object Application extends Controller {
     orderState.map(i => "o.order_state = '${i}'").foreach(conds += _)
     sb.append("select o.json from `order` o")
 
+    // userについての条件があればjoinする
     if (userCompany.nonEmpty || discountRateGte.nonEmpty || discountRateLte.nonEmpty) {
       sb.append(" inner join user u on o.order_user_id = u.user_id")
       userCompany.map(v => s"u.user_company = '${v}'").foreach(conds += _)
@@ -177,6 +186,7 @@ object Application extends Controller {
       discountRateLte.map("u.user_discount_rate <= " + _).foreach(conds += _)
     }
 
+    // itemについての条件があればjoinする
     if (itemSupplier.nonEmpty || itemStockQuantityGte.nonEmpty || itemStockQuantityLte.nonEmpty || itemBasePriceGte.nonEmpty || itemBasePriceLte.nonEmpty || itemTagsAll.nonEmpty || itemTagsAny.nonEmpty) {
       sb.append(" inner join item i on i.item_id = o.order_item_id")
       itemSupplier.map(i => s"i.item_supplier = '${i}'").foreach(conds += _)
@@ -186,12 +196,7 @@ object Application extends Controller {
       itemBasePriceLte.map("i.item_base_price <=" + _).foreach(conds += _)
     }
 
-    itemSupplier.map(i => s"i.item_supplier = '${i}'").foreach(conds += _)
-    itemStockQuantityGte.map("i.item_stock_quantity >= " + _).foreach(conds += _)
-    itemStockQuantityLte.map("i.item_stock_quantity <= " + _).foreach(conds += _)
-    itemBasePriceGte.map("i.item_base_price >=" + _).foreach(conds += _)
-    itemBasePriceLte.map("i.item_base_price <=" + _).foreach(conds += _)
-
+    // 全ての元凶(tag)
     for ((v, i) <- tagsAll.zipWithIndex) {
       val tagTable = "t" + i.toString
       val relTable = "ot" + i.toString
@@ -209,11 +214,14 @@ object Application extends Controller {
       sb.append(".id")
       conds += (s"${tagTable}.name = '${v}'")
     }
+
+    // anyがクソ重い
     if (tagsAny.nonEmpty) {
       sb.append(" inner join order_tag oott on oott.order_id = o.id inner join tag tt on oott.tag_id = tt.id")
       conds += ("tt.name in " + tagsAny.mkString("('", "','", "')"))
     }
 
+    // itemのtag
     for ((v, i) <- itemTagsAll.zipWithIndex) {
       val tagTable = "2t" + i.toString
       val relTable = "it" + i.toString
@@ -231,141 +239,22 @@ object Application extends Controller {
       sb.append(".id")
       conds += (s"${tagTable}.name = '${v}'")
     }
+
+    // 同じく重い
     if (itemTagsAny.nonEmpty) {
       sb.append(" inner join item_tag iitt on iitt.item_id = i.id inner join tag2 tt2 on iitt.tag2_id = tt2.id")
       conds += ("tt2.name in " + itemTagsAny.mkString("('", "','", "')"))
     }
 
+    // whereを最後に付け足して
     if (conds.nonEmpty) {
       sb.append(" where ")
       sb.append(conds mkString " and ")
     }
+
+    // limitして終了
     sb.append(" limit ")
     sb.append(limit.getOrElse(100).toString)
     sb.result
-  }
-
-  def query2(
-    userCompany: Option[String],
-    discountRateGte: Option[Int],
-    discountRateLte: Option[Int],
-    limit: Option[Int]
-  ): String = {
-    val sb = new StringBuilder()
-    val conds = new scala.collection.mutable.ArrayBuffer[String]()
-    userCompany.map(v => s"u.user_company = '${v}'").foreach(conds += _)
-    discountRateGte.map("u.user_discount_rate >= " + _).foreach(conds += _)
-    discountRateLte.map("u.user_discount_rate <= " + _).foreach(conds += _)
-
-    sb.append("select o.json from `order` o inner join user u on o.order_user_id = u.user_id")
-
-    if (conds.nonEmpty) {
-      sb.append(" where ")
-      sb.append(conds mkString " and ")
-    }
-    sb.append(" limit ")
-    sb.append(limit.getOrElse(100).toString)
-    sb.result
-  }
-
-  @tailrec
-  def bulkInsert(mp: Map[String, Int], li: List[(Long, String)]): Unit = {
-    val tail = bulkInsert10000(0, new StringBuilder(), mp, li)
-    if (tail.nonEmpty) {
-      bulkInsert(mp, tail)
-    } else {
-      ()
-    }
-  }
-
-  def query3(
-    itemSupplier: Option[String],
-    itemStockQuantityGte: Option[Int],
-    itemStockQuantityLte: Option[Int],
-    itemBasePriceGte: Option[Int],
-    itemBasePriceLte: Option[Int],
-    itemTagsAll: Option[String],
-    itemTagsAny: Option[String],
-    limit: Option[Int]
-  ): String = {
-    val sb = new StringBuilder()
-    val conds = new scala.collection.mutable.ArrayBuffer[String]()
-    itemSupplier.map(i => s"i.item_supplier = '${i}'").foreach(conds += _)
-    itemStockQuantityGte.map("i.item_stock_quantity >= " + _).foreach(conds += _)
-    itemStockQuantityLte.map("i.item_stock_quantity <= " + _).foreach(conds += _)
-    itemBasePriceGte.map("i.item_base_price >=" + _).foreach(conds += _)
-    itemBasePriceLte.map("i.item_base_price <=" + _).foreach(conds += _)
-    sb.append("select o.json from `order` o inner join item i on i.item_id = o.order_item_id")
-    for ((v, i) <- itemTagsAll.zipWithIndex) {
-      val tagTable = "t" + i.toString
-      val relTable = "it" + i.toString
-      sb.append(" inner join item_tag ")
-      sb.append(relTable)
-      sb.append(" on ")
-      sb.append(relTable)
-      sb.append(".item_id = i.id")
-      sb.append(" inner join tag2 ")
-      sb.append(tagTable)
-      sb.append(" on ")
-      sb.append(relTable)
-      sb.append(".tag2_id = ")
-      sb.append(tagTable)
-      sb.append(".id")
-      conds += (s"${tagTable}.name = '${v}'")
-    }
-    if (itemTagsAny.nonEmpty) {
-      sb.append(" inner join item_tag iitt on iitt.item_id = i.id inner join tag2 tt on iitt.tag2_id = tt.id")
-      conds += ("tt.name in " + itemTagsAny.mkString("('", "','", "')"))
-    }
-    if (conds.nonEmpty) {
-      sb.append(" where ")
-      sb.append(conds mkString " and ")
-    }
-    sb.append(" limit ")
-    sb.append(limit.getOrElse(100).toString)
-    sb.result
-  }
-
-
-  @tailrec
-  def bulkInsert10000(n: Int, bulk: StringBuilder, mp: Map[String, Int], li: List[(Long, String)]): List[(Long, String)] = li match {
-    case head :: tail if(n < 10000) =>
-      if(n != 0){ bulk.append(",") }
-      bulk.append("(")
-      bulk.append(head._1.toString)
-      bulk.append(",'")
-      bulk.append(mp(head._2).toString)
-      bulk.append("')")
-      bulkInsert10000(n+1, bulk, mp, tail)
-    case _ =>
-      globals.db.withSession { implicit s =>
-        (Q.u + "insert into item_tag (item_id, tag2_id) values" + bulk.result).execute
-      }
-      li
-  }
-
-  def init = Action {
-    globals.db.withSession { implicit s =>
-      val q = sql"select tag2.name, tag2.id from tag2".as[(String, Int)]
-      val mp = q.list.toMap
-      // println(mp)
-      val set = scala.collection.mutable.Set[String]()
-      // var c = 0
-      val start = System.currentTimeMillis
-      // 全件取得
-      //val li = item.map(o => (o.id, o.itemTags)).list.flatMap(t => t._2.split(",").map(t._1 -> _).toList)
-
-      //bulkInsert(mp, li)
-      // li.foreach(_._2.foreach { name =>
-      //   c = c+1
-      //   if (c % 1000 == 0) {
-      //     println(c)
-      //   }
-      //
-      //   (Q.u + "insert into tag (name) values('" + name + "') on duplicate key update name = '" + name + "'").execute
-      // })
-      println("elapse: " + (System.currentTimeMillis - start))
-      Ok
-    }
   }
 }
