@@ -48,9 +48,12 @@ object Application extends Controller {
     if(opt.isEmpty) LiteralColumn(Option(true)) else cond
 
   def time[T](f: => T, str: String): T = {
-    // val start = System.currentTimeMillis
+    val start = System.currentTimeMillis
     val r = f
-    // println(str + (System.currentTimeMillis -start) + "ms")
+    val elapse = System.currentTimeMillis-start
+    if (elapse > 1000) {
+      println(str + elapse + "ms")
+    }
     r
   }
 
