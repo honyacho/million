@@ -149,7 +149,7 @@ object Application extends Controller {
       discountRateLte.map("u.user_discount_rate <= " + _).foreach(conds += _)
     }
 
-    if (itemSupplier.nonEmpty || itemStockQuantityGte.nonEmpty || itemStockQuantityLte.nonEmpty || itemBasePriceGte.nonEmpty || itemBasePriceLte.nonEmpty) {
+    if (itemSupplier.nonEmpty || itemStockQuantityGte.nonEmpty || itemStockQuantityLte.nonEmpty || itemBasePriceGte.nonEmpty || itemBasePriceLte.nonEmpty || itemTagsAll.nonEmpty || itemTagsAny.nonEmpty) {
       sb.append(" inner join item i on i.item_id = o.order_item_id")
       itemSupplier.map(i => s"i.item_supplier = '${i}'").foreach(conds += _)
       itemStockQuantityGte.map("i.item_stock_quantity >= " + _).foreach(conds += _)
