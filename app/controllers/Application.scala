@@ -169,31 +169,31 @@ object Application extends Controller {
     // 基本だけどStringBuilderを使うことはかなり重要
     val sb = new StringBuilder()
     val conds = new scala.collection.mutable.ArrayBuffer[String]()
-    timeGte.map("o.order_date_time >= " + _).foreach(conds += _)
-    timeLte.map("o.order_date_time <= " + _).foreach(conds += _)
-    userId.map(i => s"o.order_user_id = '${i}'").foreach(conds += _)
-    itemId.map(i => s"o.order_item_id = '${i}'").foreach(conds += _)
-    quantityGte.map("o.order_quantity >=" + _).foreach(conds += _)
-    quantityLte.map("o.order_quantity <=" + _).foreach(conds += _)
-    orderState.map(i => "o.order_state = '${i}'").foreach(conds += _)
+    timeGte.foreach(conds += "o.order_date_time >= " + _)
+    timeLte.foreach(conds += "o.order_date_time <= " + _)
+    userId.foreach(i => conds += s"o.order_user_id = '${i}'")
+    itemId.foreach(i => conds += s"o.order_item_id = '${i}'")
+    quantityGte.foreach(conds += "o.order_quantity >= " + _)
+    quantityLte.foreach(conds += "o.order_quantity <= " + _)
+    orderState.foreach(i => conds += "o.order_state = '${i}'")
     sb.append("select o.json from `order` o")
 
     // userについての条件があればjoinする
     if (userCompany.nonEmpty || discountRateGte.nonEmpty || discountRateLte.nonEmpty) {
       sb.append(" inner join user u on o.order_user_id = u.user_id")
-      userCompany.map(v => s"u.user_company = '${v}'").foreach(conds += _)
-      discountRateGte.map("u.user_discount_rate >= " + _).foreach(conds += _)
-      discountRateLte.map("u.user_discount_rate <= " + _).foreach(conds += _)
+      userCompany.map(v => conds += s"u.user_company = '${v}'")
+      discountRateGte.foreach(conds += "u.user_discount_rate >= " + _)
+      discountRateLte.foreach(conds += "u.user_discount_rate <= " + _)
     }
 
     // itemについての条件があればjoinする
     if (itemSupplier.nonEmpty || itemStockQuantityGte.nonEmpty || itemStockQuantityLte.nonEmpty || itemBasePriceGte.nonEmpty || itemBasePriceLte.nonEmpty || itemTagsAll.nonEmpty || itemTagsAny.nonEmpty) {
       sb.append(" inner join item i on i.item_id = o.order_item_id")
-      itemSupplier.map(i => s"i.item_supplier = '${i}'").foreach(conds += _)
-      itemStockQuantityGte.map("i.item_stock_quantity >= " + _).foreach(conds += _)
-      itemStockQuantityLte.map("i.item_stock_quantity <= " + _).foreach(conds += _)
-      itemBasePriceGte.map("i.item_base_price >=" + _).foreach(conds += _)
-      itemBasePriceLte.map("i.item_base_price <=" + _).foreach(conds += _)
+      itemSupplier.foreach(i => conds += s"i.item_supplier = '${i}'")
+      itemStockQuantityGte.foreach(conds += "i.item_stock_quantity >= " + _)
+      itemStockQuantityLte.foreach(conds += "i.item_stock_quantity <= " + _)
+      itemBasePriceGte.foreach(conds += "i.item_base_price >= " + _)
+      itemBasePriceLte.foreach(conds += "i.item_base_price <= " + _)
     }
 
     // 全ての元凶(tag)
